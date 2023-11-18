@@ -856,6 +856,39 @@ class SequenceDecoder(nn.Module):
 #@title Model (backbone + head)
 
 """
+Multi-Head Regression for HyenaDNA
+"""
+class RegressionHead(nn.Module):
+    def __init__(self, d_model, d_output, mode="last"):
+        super().__init__()
+        d_hidden = int((d_model + d_output) / 2) # just average input and output layers
+        assert d_hidden > 0
+
+        self.fc1 = nn.Linear(d_model, d_hidden)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(d_hidden, d_output)
+
+        self.mode = mode
+    
+    def forward(self, x):
+
+        # here we either use the last or average of the embeddings,
+        # following the format above
+        if self.mode == "last":
+            print("getting last token")
+            x = x[:, -1, :]
+        elif self.mode == 'average':
+            x = x.mean(dim=1)
+        else:
+            raise ValueError("Mode must be 'last' or 'average'")
+
+        a = self.fc1(x)
+        b = self.relu(a)
+        c = self.fc2(b)
+
+        return c
+
+"""
 Putting it all together, the model consists of a backbone model
 and a decoder head (you can turn off head for embeddings only too).
 
@@ -898,7 +931,7 @@ class HyenaDNAModel(nn.Module):
         # we only need a head if doing classification, otherwise we'll use the
         # hidden states as embeddings
         if self.use_head:
-            self.head = SequenceDecoder(d_model=d_model, d_output=n_classes, l_output=0, mode='pool')
+            self.head = RegressionHead(d_model=d_model, d_output=n_classes)
 
         # Initialize weights and apply final processing
         self.apply(partial(_init_weights, n_layer=n_layer,
